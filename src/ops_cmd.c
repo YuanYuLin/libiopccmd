@@ -59,10 +59,10 @@ static uint8_t process(struct msg_t* req, struct msg_t* res)
 	return cmd_status;
 }
 
-static uint8_t exec_shell(int16_t index, uint8_t* json) 
-{
-	_exec_shell(index, json);
-}
+//static uint8_t exec_shell(int16_t index, uint8_t* json) 
+//{
+	//_exec_shell(index, json);
+//}
 
 static struct ops_cmd_t *obj;
 struct ops_cmd_t *get_cmd_instance()
@@ -72,7 +72,7 @@ struct ops_cmd_t *get_cmd_instance()
 		obj->init = init;
 		obj->show_all = show_all;
 		obj->process = process;
-		obj->exec_shell = exec_shell;
+		//obj->exec_shell = exec_shell;
 	}
 
 	return obj;
