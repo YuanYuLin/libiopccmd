@@ -1,4 +1,5 @@
 #include <pthread.h>
+#include "lxccontainer.h"
 
 #include "ops_log.h"
 #include "ops_misc.h"
@@ -13,7 +14,7 @@ struct syscmd_t {
 	pthread_t pid;
 	uint8_t status_id;
 	int (*syscmd_func)(uint8_t status_id, uint8_t* json);
-} __attribute__ ((packed));
+}; 
 
 struct syscmd_status_t {
 	uint8_t status;
@@ -23,6 +24,7 @@ struct syscmd_status_t {
 #define ID_STATUS_NETIFC	0x00
 #define ID_STATUS_DRBD		0x01
 #define ID_STATUS_SSH		0x02
+#define ID_STATUS_LXC		0x03
 
 #define STATUS_SSH_GENKEY_FINISHED	0x01
 #define STATUS_SSH_RUNNING		0x02
@@ -815,6 +817,71 @@ static int stop_ssh(uint8_t status_id, uint8_t* args)
 	return 0;
 }
 
+static int gen_lxc_cfg(uint8_t status_id, uint8_t* args)
+{
+	struct ops_db_t* db = get_db_instance();
+	//struct ops_log_t* log = get_log_instance();
+	struct ops_json_t* json = get_json_instance();
+	uint8_t db_val[DBVALLEN];
+	memset(&db_val[0], 0, DBVALLEN);
+	db->get_val("drbd_cfg", &db_val[0]);
+	json_reader_t* reader = json->create_json_reader(args);
+	json_reader_t* db_reader = json->create_json_reader(&db_val[0]);
+	struct lxc_container *ctx = NULL;
+	uint8_t cfg_idx = json->get_json_int(reader, "index", 0);
+	uint8_t* vm_name = json->get_json_string(db_reader, "name", "");
+	uint8_t* vm_rootfs = json->get_json_string(db_reader, "rootfs", "");
+	uint8_t* vm_fstab = json->get_json_string(db_reader, "fstab", "");
+	uint8_t* vm_nettype = json->get_json_string(db_reader, "nettype", "");
+	uint8_t* vm_nethwlink = json->get_json_string(db_reader, "nethwlink", "");
+	uint8_t* vm_nethwaddr = json->get_json_string(db_reader, "nethwaddr", "");
+	uint8_t* vm_ipaddress = json->get_json_string(db_reader, "ipaddress", "");
+	uint8_t* vm_gateway = json->get_json_string(db_reader, "gateway", "");
+	
+        ctx = (struct lxc_container*)lxc_container_new(vm_name, "/var/lib/lxc");
+
+	if(ctx) {
+		if(ctx->is_defined(ctx)) {
+			printf("1.vm%d thought it was defined\n", cfg_idx);
+			fprintf(stderr, "1.vm%d thought it was defined\n", cfg_idx);
+		}
+
+		ctx->clear_config(ctx);
+		ctx->set_config_item(ctx, "lxc.utsname", vm_name);
+		ctx->set_config_item(ctx, "lxc.rootfs", vm_rootfs);
+		ctx->set_config_item(ctx, "lxc.pts", "256");
+		ctx->set_config_item(ctx, "lxc.autodev", "1");
+		ctx->set_config_item(ctx, "lxc.init_cmd", "/init");
+		ctx->set_config_item(ctx, "lxc.mount", vm_fstab);
+
+		//network interface eth0
+		ctx->set_config_item(ctx, "lxc.network.type", vm_nettype);
+		ctx->set_config_item(ctx, "lxc.network.flags", "up");
+		ctx->set_config_item(ctx, "lxc.network.link", vm_nethwlink);
+		ctx->set_config_item(ctx, "lxc.network.name", "eth0");
+		ctx->set_config_item(ctx, "lxc.network.hwaddr", vm_nethwaddr);
+
+		//network interface eth1
+		ctx->set_config_item(ctx, "lxc.network.type", "veth");
+		ctx->set_config_item(ctx, "lxc.network.flags", "up");
+		ctx->set_config_item(ctx, "lxc.network.link", "br1");
+		ctx->set_config_item(ctx, "lxc.network.name", "eth1");
+		ctx->set_config_item(ctx, "lxc.network.ipv4", vm_ipaddress);
+		ctx->set_config_item(ctx, "lxc.network.ipv4.gateway", vm_gateway);
+
+		ctx->save_config(ctx, NULL);
+
+		printf("vm fstab cfg %s\n", vm_fstab);
+		printf("save config[%s]\n", vm_name);
+
+	} else {
+		fprintf(stderr, "1.Failed to setup lxc_container struct\n");
+	}
+
+
+	return 0;
+}
+
 static struct syscmd_t list[] = {
         {"up_ifc", 	"", 0, ID_STATUS_NETIFC, up_ifc},
         {"down_ifc",	"", 0, ID_STATUS_NETIFC, down_ifc},
@@ -829,6 +896,8 @@ static struct syscmd_t list[] = {
 	{"start_ssh",	"", 0, ID_STATUS_SSH, start_ssh},
 	{"stop_ssh",	"", 0, ID_STATUS_SSH, stop_ssh},
 
+	{"gen_lxc_cfg", "", 0, ID_STATUS_LXC, gen_lxc_cfg},
+
 	{"set_hostname", "", 0, ID_STATUS_UNSPEC, set_hostname},
 	{"reboot_system", "", 0, ID_STATUS_UNSPEC, reboot_system},
 	{"sync_datetime", "", 0, ID_STATUS_UNSPEC, sync_datetime},
@@ -838,8 +907,11 @@ static struct syscmd_t list[] = {
 
 static void* exec_shell(void* arg)
 {
+	struct ops_log_t* log = get_log_instance();
 	struct syscmd_t* cmd = (struct syscmd_t*)arg;
+	log->debug(0x01, "[%s, %s-%d] cmd begin\n", __FILE__, __func__, __LINE__);
 	cmd->syscmd_func(cmd->status_id, &cmd->json_param[0]);
+	log->debug(0x01, "[%s, %s-%d] cmd end\n", __FILE__, __func__, __LINE__);
 	return NULL;
 }
 
@@ -847,7 +919,7 @@ uint8_t run_new_shell(uint8_t* req_data, uint8_t* res_data)
 {
 	struct queue_msg_t qreq;
 	struct msg_t* req = &qreq.msg;
-	//struct ops_log_t* log = get_log_instance();
+	struct ops_log_t* log = get_log_instance();
 	//struct ops_mq_t* mq = get_mq_instance();
 	struct ops_json_t* json = get_json_instance();
 	struct syscmd_t* cmd = NULL;
@@ -860,6 +932,7 @@ uint8_t run_new_shell(uint8_t* req_data, uint8_t* res_data)
 	for(i=0;i<list_size;i++) {
 		cmd = &list[i];
 		if( (!strcmp(cmd->cmd, ops)) && (cmd->syscmd_func) ) {
+			log->debug(0x01, "[%s, %s-%d] %s\n", __FILE__, __func__, __LINE__, ops);
 			is_found = 1;
 			break;
 		}
@@ -876,8 +949,10 @@ uint8_t run_new_shell(uint8_t* req_data, uint8_t* res_data)
 		//if(0) {
 		//	mq->set_to(QUEUE_NAME_SYSCMD, &qreq);
 		//} else {
+			log->debug(0x01, "[%s, %s-%d] pthread begin %s\n", __FILE__, __func__, __LINE__, ops);
 			memcpy(cmd->json_param, req_data, req->data_size);
 			pthread_create(&cmd->pid, NULL, &exec_shell, cmd);
+			log->debug(0x01, "[%s, %s-%d] pthread  end %s\n", __FILE__, __func__, __LINE__, ops);
 		//}
 		return CMD_STATUS_NORMAL;
 	}

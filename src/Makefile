@@ -4,6 +4,7 @@ TARGET = libiopccmd.so
 CFLAGS += -I$(SDKSTAGE)/usr/include/libiopcmisc
 CFLAGS += -I$(SDKSTAGE)/usr/include/libiopcdao
 CFLAGS += -I$(SDKSTAGE)/usr/include/
+CFLAGS += -I$(SDKSTAGE)/usr/include/lxc
 CFLAGS += -I./include/
 CFLAGS += 
 
