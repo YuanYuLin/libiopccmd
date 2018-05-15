@@ -1,4 +1,6 @@
 #include <pthread.h>
+#include <sys/stat.h>
+
 #include "lxccontainer.h"
 
 #include "ops_log.h"
@@ -14,7 +16,7 @@ struct syscmd_t {
 	pthread_t pid;
 	uint8_t status_id;
 	int (*syscmd_func)(uint8_t status_id, uint8_t* json);
-}; 
+} __attribute__((packed)); 
 
 struct syscmd_status_t {
 	uint8_t status;
@@ -25,6 +27,7 @@ struct syscmd_status_t {
 #define ID_STATUS_DRBD		0x01
 #define ID_STATUS_SSH		0x02
 #define ID_STATUS_LXC		0x03
+#define ID_STATUS_STORAGE	0x04
 
 #define STATUS_SSH_GENKEY_FINISHED	0x01
 #define STATUS_SSH_RUNNING		0x02
@@ -109,7 +112,7 @@ uint8_t get_status_drbd()
  * "dns3":"8.8.4.4"
  * }
  */
-static int up_ifc(uint8_t status_id, uint8_t* args)
+static int up_netifc(uint8_t status_id, uint8_t* args)
 {
     struct ops_log_t* log = get_log_instance();
     struct ops_json_t* json = get_json_instance();
@@ -212,32 +215,13 @@ static int up_ifc(uint8_t status_id, uint8_t* args)
 		    sprintf(cmd, "ifconfig %s %s netmask %s", net_ifc_name, net_address, net_netmask);
 		    log->debug(0x01, "%s - %s\n", __func__, cmd);
 		    misc->syscmd(cmd);
-	    } else if( (strlen(net_src) == strlen("storage")) && (memcmp(net_src, "storage", strlen("storage")) == 0) ) {
-		    uint8_t* net_cfg_json = NULL;
-		    json_reader_t* net_cfg_reader = NULL;
-		    if(db->get_val("ext_net_cfg_json", &db_val3[0]) <= 0){
-			    net_cfg_json = json->get_json_string(net_reader, "net_cfg_json", "");
-			    log->debug(0x01, "[%s - %d] %s\n", __func__, __LINE__, net_cfg_json);
-			    net_cfg_reader = json->create_json_reader_by_file(net_cfg_json);
-			    json->out_json_to_bytes(net_cfg_reader, &db_val3[0]);
-			    db->set_val("ext_net_cfg_json", &db_val3[0]);
-		    } else {
-			    net_cfg_reader = json->create_json_reader(&db_val3[0]);
-		    }
-		    net_address = json->get_json_string(net_cfg_reader, "address", "0.0.0.0");
-		    net_netmask = json->get_json_string(net_cfg_reader, "netmask", "255.255.255.0");
-		    memset(&cmd[0], 0, CMDLEN);
-		    sprintf(cmd, "ifconfig %s %s netmask %s", net_ifc_name, net_address, net_netmask);
-		    log->debug(0x01, "%s - %s\n", __func__, cmd);
-		    misc->syscmd(cmd);
-	    } else {
 	    }
     }
 
     return 0;
 }
 
-static int down_ifc(uint8_t status_id, uint8_t* args)
+static int down_netifc(uint8_t status_id, uint8_t* args)
 {
     struct ops_log_t* log = get_log_instance();
     struct ops_json_t* json = get_json_instance();
@@ -521,7 +505,12 @@ static int del_vlan(uint8_t* args)
  * }
  * 2. "umount_hdd"
  */
-static int mount_hdd(uint8_t status_id, uint8_t* args)
+static int format_storage(uint8_t status_id, uint8_t* args)
+{
+	return 0;
+}
+
+static int mount_storage(uint8_t status_id, uint8_t* args)
 {
     struct ops_log_t* log = get_log_instance();
     struct ops_json_t* json = get_json_instance();
@@ -530,10 +519,10 @@ static int mount_hdd(uint8_t status_id, uint8_t* args)
     uint8_t cmd[CMDLEN] = {0};
     uint8_t db_val[DBVALLEN];
     uint8_t db_val2[DBVALLEN];
-    uint8_t db_val3[DBVALLEN];
+//    uint8_t db_val3[DBVALLEN];
     int count = 0;
     int i = 0;
-    int x = 0;
+    //int x = 0;
     uint8_t* str_ptr = NULL;
     uint8_t* part_type = NULL;
     uint8_t* part_src = NULL;
@@ -541,7 +530,7 @@ static int mount_hdd(uint8_t status_id, uint8_t* args)
     memset(&cmd[0], 0, CMDLEN);
     memset(&db_val[0], 0, DBVALLEN);
     memset(&db_val2[0], 0, DBVALLEN);
-    memset(&db_val3[0], 0, DBVALLEN);
+ //   memset(&db_val3[0], 0, DBVALLEN);
     //json_reader_t* reader = json->create_json_reader(args);
     db->get_val("storage_count", &db_val[0]);
     json_reader_t* db_reader = json->create_json_reader(&db_val[0]);
@@ -553,41 +542,74 @@ static int mount_hdd(uint8_t status_id, uint8_t* args)
 	    log->debug(0x01, "[%s %d] - %s\n", __func__, __LINE__, db_val2);
 	    json_reader_t* storage_reader = json->create_json_reader(&db_val2[0]);
     	    json->debug_json(storage_reader);
-	    json_reader_t* storage_partitions_reader = json->get_json_array(storage_reader, "partitions", NULL);
-	    if(storage_partitions_reader) {
-	    	    log->debug(0x01, "[%s %d] \n", __func__, __LINE__);
-	    	    //json->debug_json(storage_partitions_reader);
-		    int storage_partitions_count = json->get_json_array_count(storage_partitions_reader);
-	    	    log->debug(0x01, "[%s - %d] %d\n", __func__, __LINE__, storage_partitions_count);
-		    for(x=0;x<storage_partitions_count;x++) {
-			    uint8_t* storage_partition_name = json->get_json_array_string_by_index(storage_partitions_reader, x, "");
-			    db->get_val(storage_partition_name, &db_val3[0]);
-			    json_reader_t* partition_reader = json->create_json_reader(&db_val3[0]);
-	    		    log->debug(0x01, "[%s %d] - %s\n", __func__, __LINE__, db_val3);
-			    json->debug_json(partition_reader);
-			    part_type = json->get_json_string(partition_reader, "type", "");
-			    part_src = json->get_json_string(partition_reader, "src", "");
-			    part_dst = json->get_json_string(partition_reader, "dst", "");
-	    		    if( (strlen(part_type) == strlen("fat")) && (memcmp(part_type, "fat", strlen("fat")) == 0) ) {
-    	    			    memset(&cmd[0], 0, CMDLEN);
-				    sprintf(cmd, "mkdir -p %s", part_dst);
-				    log->debug(0x01, "%s - %s\n", __func__, cmd);
-				    misc->syscmd(cmd);
+	    part_type = json->get_json_string(storage_reader, "type", "");
+	    part_src = json->get_json_string(storage_reader, "src", "");
+	    part_dst = json->get_json_string(storage_reader, "dst", "");
+	    if( (strlen(part_type) == strlen("fat")) && (memcmp(part_type, "fat", strlen("fat")) == 0) ) {
+		    memset(&cmd[0], 0, CMDLEN);
+		    sprintf(cmd, "mkdir -p %s", part_dst);
+		    log->debug(0x01, "%s - %s\n", __func__, cmd);
+		    misc->syscmd(cmd);
 
-    	    			    memset(&cmd[0], 0, CMDLEN);
-				    sprintf(cmd, "mount -t vfat %s %s", part_src, part_dst);
-				    log->debug(0x01, "%s - %s\n", __func__, cmd);
-				    misc->syscmd(cmd);
-			    }
-		    }
-	    } else {
-	    	    log->debug(0x01, "[%s %d] \n", __func__, __LINE__);
+		    memset(&cmd[0], 0, CMDLEN);
+		    sprintf(cmd, "mount -t vfat %s %s", part_src, part_dst);
+		    log->debug(0x01, "%s - %s\n", __func__, cmd);
+		    misc->syscmd(cmd);
 	    }
     }
 }
 
-static int umount_hdd(uint8_t status_id, uint8_t* args)
+static int umount_storage(uint8_t status_id, uint8_t* args)
 {
+}
+
+static void setup_zram(long val_kb, uint8_t zram_idx)
+{
+    uint8_t cmd[CMDLEN] = {0};
+    struct ops_log_t* log = get_log_instance();
+    struct ops_misc_t* misc = get_misc_instance();
+    memset(&cmd[0], 0, CMDLEN);
+    sprintf(cmd, "/sys/block/zram%d/disksize", zram_idx);
+
+    FILE *fp = fopen(cmd, "r+");
+
+    if(fp == NULL) {
+            log->error(0x01, "Can not open /sys/block/zram%d/disksize\n", zram_idx);
+            return ;
+    }
+    fprintf(fp, "%ld", val_kb * 1024);
+    fclose(fp);
+
+    memset(&cmd[0], 0, CMDLEN);
+    sprintf(cmd, "/sbin/mkswap /dev/zram%d", zram_idx);
+    misc->syscmd(cmd);
+
+    memset(&cmd[0], 0, CMDLEN);
+    sprintf(cmd, "/sbin/swapon /dev/zram%d", zram_idx);
+    misc->syscmd(cmd);
+}
+
+static int mount_swap(uint8_t status_id, uint8_t* args)
+{
+    struct ops_log_t* log = get_log_instance();
+    struct ops_json_t* json = get_json_instance();
+    struct ops_db_t* db = get_db_instance();
+    uint8_t db_val[DBVALLEN];
+    uint8_t* swap_type = NULL;
+    uint8_t* swap_device = NULL;
+    long swap_size = 0;
+
+    memset(&db_val[0], 0, DBVALLEN);
+
+    db->get_val("swap_cfg", &db_val[0]);
+    json_reader_t* db_reader = json->create_json_reader(&db_val[0]);
+    swap_type = json->get_json_string(db_reader, "type", "");
+    swap_size = json->get_json_int(db_reader, "size_kb", 20480);
+    swap_device = json->get_json_string(db_reader, "device", "");
+    log->debug(0x01, "swap type %s, size %d, device %s\n", swap_type, swap_size, swap_device);
+    if(strcmp(swap_type, "zram") == 0) {
+	    setup_zram(swap_size, (uint8_t)strtol(swap_device, NULL, 10));
+    }
 }
 
 #define DRBD_CFG "/tmp/drbd.cfg"
@@ -820,15 +842,21 @@ static int stop_ssh(uint8_t status_id, uint8_t* args)
 static int gen_lxc_cfg(uint8_t status_id, uint8_t* args)
 {
 	struct ops_db_t* db = get_db_instance();
-	//struct ops_log_t* log = get_log_instance();
+	struct ops_log_t* log = get_log_instance();
 	struct ops_json_t* json = get_json_instance();
 	uint8_t db_val[DBVALLEN];
 	memset(&db_val[0], 0, DBVALLEN);
-	db->get_val("drbd_cfg", &db_val[0]);
+	uint8_t db_key[10];
+	memset(&db_key[0], 0, sizeof(db_key));
+	log->debug(0x01, "[%s-%s-%d] %s\n", __FILE__, __func__, __LINE__, args);
 	json_reader_t* reader = json->create_json_reader(args);
-	json_reader_t* db_reader = json->create_json_reader(&db_val[0]);
-	struct lxc_container *ctx = NULL;
 	uint8_t cfg_idx = json->get_json_int(reader, "index", 0);
+	sprintf(db_key, "lxc_%d", cfg_idx);
+	log->debug(0x01, "[%s-%s-%d] %s\n", __FILE__, __func__, __LINE__, db_key);
+	db->get_val(db_key, &db_val[0]);
+	log->debug(0x01, "[%s-%s-%d] %s\n", __FILE__, __func__, __LINE__, db_val);
+
+	json_reader_t* db_reader = json->create_json_reader(&db_val[0]);
 	uint8_t* vm_name = json->get_json_string(db_reader, "name", "");
 	uint8_t* vm_rootfs = json->get_json_string(db_reader, "rootfs", "");
 	uint8_t* vm_fstab = json->get_json_string(db_reader, "fstab", "");
@@ -838,9 +866,15 @@ static int gen_lxc_cfg(uint8_t status_id, uint8_t* args)
 	uint8_t* vm_ipaddress = json->get_json_string(db_reader, "ipaddress", "");
 	uint8_t* vm_gateway = json->get_json_string(db_reader, "gateway", "");
 	
+	log->debug(0x01, "[%s-%s-%d] %d, %s, %s, %s, %s, %s, %s, %s, %s\n", __FILE__, __func__, __LINE__, cfg_idx, vm_name, vm_rootfs, vm_fstab, vm_nettype, vm_nethwlink, vm_nethwaddr, vm_ipaddress, vm_gateway);
+	struct lxc_container *ctx = NULL;
+	mkdir("/var/lib", 0755);
+	mkdir("/var/lib/lxc", 0755);
+	mkdir("/var/lib/lxc/rootfs", 0755);
         ctx = (struct lxc_container*)lxc_container_new(vm_name, "/var/lib/lxc");
 
 	if(ctx) {
+		log->debug(0x01, "ctx created\n");
 		if(ctx->is_defined(ctx)) {
 			printf("1.vm%d thought it was defined\n", cfg_idx);
 			fprintf(stderr, "1.vm%d thought it was defined\n", cfg_idx);
@@ -875,19 +909,26 @@ static int gen_lxc_cfg(uint8_t status_id, uint8_t* args)
 		printf("save config[%s]\n", vm_name);
 
 	} else {
+		log->debug(0x01, "ctx failed to create\n");
 		fprintf(stderr, "1.Failed to setup lxc_container struct\n");
 	}
-
 
 	return 0;
 }
 
-static struct syscmd_t list[] = {
-        {"up_ifc", 	"", 0, ID_STATUS_NETIFC, up_ifc},
-        {"down_ifc",	"", 0, ID_STATUS_NETIFC, down_ifc},
+static int start_lxc(uint8_t status_id, uint8_t* args)
+{
+	return 0;
+}
 
-	{"mount_hdd",	"", 0, ID_STATUS_UNSPEC, mount_hdd},
-	{"umount_hdd",	"", 0, ID_STATUS_UNSPEC, umount_hdd},
+static struct syscmd_t list[] = {
+        {"up_netifc", 	"", 0, ID_STATUS_NETIFC, up_netifc},
+        {"down_netifc",	"", 0, ID_STATUS_NETIFC, down_netifc},
+
+	{"format_storage","", 0, ID_STATUS_STORAGE, format_storage},
+	{"mount_storage","", 0, ID_STATUS_STORAGE, mount_storage},
+	{"umount_storage","", 0, ID_STATUS_STORAGE, umount_storage},
+	{"mount_swap", "", 0, ID_STATUS_UNSPEC, mount_swap},
 
         {"start_drbd",	"", 0, ID_STATUS_DRBD, start_drbd},
         {"stop_drbd",	"", 0, ID_STATUS_DRBD, stop_drbd},
@@ -897,6 +938,7 @@ static struct syscmd_t list[] = {
 	{"stop_ssh",	"", 0, ID_STATUS_SSH, stop_ssh},
 
 	{"gen_lxc_cfg", "", 0, ID_STATUS_LXC, gen_lxc_cfg},
+	{"start_lxc",	"", 0, ID_STATUS_LXC, start_lxc},
 
 	{"set_hostname", "", 0, ID_STATUS_UNSPEC, set_hostname},
 	{"reboot_system", "", 0, ID_STATUS_UNSPEC, reboot_system},
@@ -907,9 +949,10 @@ static struct syscmd_t list[] = {
 
 static void* exec_shell(void* arg)
 {
-	struct ops_log_t* log = get_log_instance();
+	//uint8_t idx = *((uint8_t*)arg);
 	struct syscmd_t* cmd = (struct syscmd_t*)arg;
-	log->debug(0x01, "[%s, %s-%d] cmd begin\n", __FILE__, __func__, __LINE__);
+	struct ops_log_t* log = get_log_instance();
+	log->debug(0x01, "[%s, %s-%d] cmd begin : %s\n", __FILE__, __func__, __LINE__, cmd->json_param);
 	cmd->syscmd_func(cmd->status_id, &cmd->json_param[0]);
 	log->debug(0x01, "[%s, %s-%d] cmd end\n", __FILE__, __func__, __LINE__);
 	return NULL;
@@ -917,8 +960,8 @@ static void* exec_shell(void* arg)
 
 uint8_t run_new_shell(uint8_t* req_data, uint8_t* res_data)
 {
-	struct queue_msg_t qreq;
-	struct msg_t* req = &qreq.msg;
+	//struct queue_msg_t qreq;
+	//struct msg_t* req = &qreq.msg;
 	struct ops_log_t* log = get_log_instance();
 	//struct ops_mq_t* mq = get_mq_instance();
 	struct ops_json_t* json = get_json_instance();
@@ -931,7 +974,7 @@ uint8_t run_new_shell(uint8_t* req_data, uint8_t* res_data)
 
 	for(i=0;i<list_size;i++) {
 		cmd = &list[i];
-		if( (!strcmp(cmd->cmd, ops)) && (cmd->syscmd_func) ) {
+		if( (strcmp(cmd->cmd, ops) == 0) && (cmd->syscmd_func) ) {
 			log->debug(0x01, "[%s, %s-%d] %s\n", __FILE__, __func__, __LINE__, ops);
 			is_found = 1;
 			break;
@@ -949,9 +992,9 @@ uint8_t run_new_shell(uint8_t* req_data, uint8_t* res_data)
 		//if(0) {
 		//	mq->set_to(QUEUE_NAME_SYSCMD, &qreq);
 		//} else {
-			log->debug(0x01, "[%s, %s-%d] pthread begin %s\n", __FILE__, __func__, __LINE__, ops);
-			memcpy(cmd->json_param, req_data, req->data_size);
-			pthread_create(&cmd->pid, NULL, &exec_shell, cmd);
+			memcpy(&cmd->json_param[0], req_data, strlen(req_data));
+			log->debug(0x01, "[%s, %s-%d] pthread begin %s\n", __FILE__, __func__, __LINE__, cmd->json_param);
+			pthread_create(&cmd->pid, NULL, &exec_shell, (void*)cmd);
 			log->debug(0x01, "[%s, %s-%d] pthread  end %s\n", __FILE__, __func__, __LINE__, ops);
 		//}
 		return CMD_STATUS_NORMAL;
