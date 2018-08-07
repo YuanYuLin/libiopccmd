@@ -5,6 +5,7 @@ pkg_path = ""
 output_dir = ""
 #crosscc = ""
 dst_include_dir = ""
+PKG_LXC="lxc"
 
 def set_global(args):
     global pkg_path
@@ -18,6 +19,9 @@ def set_global(args):
 
 def MAIN_ENV(args):
     set_global(args)
+
+    if iopc.is_selected_package(PKG_LXC):
+        ops.exportEnv(ops.setEnv("SUPPORT_LXC", "y"))
 
     return False
 

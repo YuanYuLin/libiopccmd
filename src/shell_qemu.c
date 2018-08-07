@@ -1,0 +1,142 @@
+#include "shell_common.h"
+#include "shell_qemu.h"
+
+#ifdef SUPPORT_QEMU
+
+static int get_qemu_count()
+{
+    struct ops_db_t *db = get_db_instance();
+    struct ops_json_t *json = get_json_instance();
+    uint8_t db_val[DBVALLEN];
+    int count = 0;
+    memset(&db_val[0], 0, DBVALLEN);
+    db->get_val("qemu_count", &db_val[0]);
+    json_reader_t *db_reader = json->create_json_reader(&db_val[0]);
+    count = json->get_json_array_count(db_reader);
+    return count;
+}
+
+static uint8_t* get_qemu_item_name_by_index(uint8_t index)
+{
+    uint8_t db_val[DBVALLEN] = {0};
+    struct ops_db_t* db = get_db_instance();
+    struct ops_json_t* json = get_json_instance();
+    uint8_t *str_ptr = NULL;
+    memset(&db_val[0], 0, DBVALLEN);
+    db->get_val("qemu_count", &db_val[0]);
+    json_reader_t* db_reader = json->create_json_reader(&db_val[0]);
+    str_ptr = json->get_json_array_string_by_index(db_reader, index, "");
+    return str_ptr;
+}
+
+#define QEMU_IFUP	"/tmp/qemu-ifup"
+static void write_qemu_ifup()
+{
+	struct ops_misc_t *misc = get_misc_instance();
+	uint8_t path[20] = { 0 };
+	FILE *fp = NULL;
+	if(!misc->is_file_exist(path)) {
+		memset(&path[0], 0, 20);
+		sprintf(path, QEMU_IFUP);
+		fp = fopen(path, "w");
+		if(fp) {
+			fprintf(fp, "#!/bin/sh\n");
+			fprintf(fp, "BRIDGE='br0'\n");
+			fprintf(fp, "NETIFC=$1\n");
+			fprintf(fp, "/sbin/ifconfig $NETIFC promisc 0.0.0.0\n");
+			fprintf(fp, "/usr/sbin/brctl addif $BRIDGE $NETIFC\n");
+			fprintf(fp, "/usr/sbin/brctl stp $BRIDGE off\n");
+			fclose(fp);
+			chmod(path, S_IRUSR | S_IWUSR | S_IXUSR);
+		}
+	}
+}
+
+#define QEMU_SH		"/tmp/qemu_%d.sh"
+static void write_qemu_sh(uint8_t idx, uint8_t *name, uint8_t *rootfs, uint8_t *nethwaddr, uint16_t memory)
+{
+	const uint8_t *sys_rootfs_id = "disk-virtio-sys";
+	const uint8_t *sys_netdev_id = "net-virtio-sys";
+	uint8_t supported_kvm = 0;
+	uint8_t path[20] = { 0 };
+	memset(&path[0], 0, 20);
+	sprintf(path, QEMU_SH, idx);
+	FILE* fp = fopen(path, "w");
+
+	if(fp) {
+		fprintf(fp, "#!/bin/sh\n");
+		if(supported_kvm) {
+			fprintf(fp, "/bin/grep 'vmx' /proc/cpuinfo\n");
+			fprintf(fp, "support_intel_kvm=$?\n");
+			fprintf(fp, "if [ $support_intel_kvm == 0 ]; then\n");
+			fprintf(fp, "SUPPORT_KVM='-enable-kvm -cpu host'\n");
+			fprintf(fp, "fi\n");
+
+			fprintf(fp, "/bin/grep 'svm' /proc/cpuinfo\n");
+			fprintf(fp, "support_amd_kvm=$?\n");
+			fprintf(fp, "if [ $support_amd_kvm == 0 ]; then\n");
+			fprintf(fp, "SUPPORT_KVM='-enable-kvm -cpu host'\n");
+			fprintf(fp, "fi\n");
+		}
+		fprintf(fp, "QEMU1='qemu-system-x86_64 -M q35 -realtime mlock=off -no-user-config -nodefaults'\n");
+		fprintf(fp, "QEMU2='-uuid 20180801-0000-0000-0000-%012d'\n", idx);
+		fprintf(fp, "QEMU3='-m %d -vnc :%d -vga std'\n", memory, idx);
+		fprintf(fp, "QEMU4=$SUPPORT_KVM\n");
+
+		fprintf(fp, "PCI1='-device virtio-balloon-pci,id=balloon0 -msg timestamp=on'\n");
+		fprintf(fp, "PCI2='–drive file=%s,format=qcow2,if=none,id=device-%s'\n", rootfs, sys_rootfs_id);
+		fprintf(fp, "PCI21='-device virtio-blk-pci,scsi=off,bus=pci.0,addr=0x2,drive=device-%s,id=%s,bootindex=2'\n", sys_rootfs_id, sys_rootfs_id);
+		fprintf(fp, "PCI3='-netdev type=tap,script=/tmp/qemu-ifup,id=device-%s'\n", sys_netdev_id);
+		fprintf(fp, "PCI31='-device virtio-net-pci,netdev=device-%s,id=%s,mac=%s,bus=pci.0,addr=0x3'\n", sys_netdev_id, sys_netdev_id, nethwaddr);
+
+		fprintf(fp, "QEMU='$QEMU1 $QEMU2 $QEMU3 $QEMU4 $PCI1 $PCI2 $PCI21 $PCI3 $PCI31'\n");
+		fprintf(fp, "$QEMU\n");
+		fclose(fp);
+		chmod(path, S_IRUSR | S_IWUSR | S_IXUSR);
+	}
+}
+
+static int create_qemu_sh(uint8_t idx)
+{
+    struct ops_log_t *log = get_log_instance();
+    struct ops_db_t *db = get_db_instance();
+    struct ops_json_t *json = get_json_instance();
+    uint8_t db_item[DBVALLEN];
+    memset(&db_item[0], 0, DBVALLEN);
+    uint8_t *item = get_qemu_item_name_by_index(idx);
+    db->get_val(item, &db_item[0]);
+    json_reader_t *qemu_reader = json->create_json_reader(&db_item[0]);
+
+    int enable = json->get_json_int(qemu_reader, "enable", 0);
+    uint8_t *name = json->get_json_string(qemu_reader, "name", "");
+    uint8_t *rootfs = json->get_json_string(qemu_reader, "rootfs", "");
+    uint8_t *nethwaddr = json->get_json_string(qemu_reader, "nethwaddr", "");
+    uint16_t memory = json->get_json_int(qemu_reader, "memory", 0);
+    log->debug(0x01, "en:%d, %s, %s, %s\n", enable, name, rootfs, nethwaddr);
+    write_qemu_sh(idx, name, rootfs, nethwaddr, memory);
+    return enable;
+}
+
+static int execute_qemu_sh(int idx)
+{
+    struct ops_misc_t *misc = get_misc_instance();
+	uint8_t path[20] = { 0 };
+	memset(&path[0], 0, 20);
+	sprintf(path, QEMU_SH, idx);
+	misc->syscmd(path);
+	return 0;
+}
+
+int start_qemu(uint8_t status_id, uint8_t * args)
+{
+    write_qemu_ifup();
+    int qemu_count = get_qemu_count();
+    for(int idx=0;idx<qemu_count;idx++) {
+	    if(create_qemu_sh(idx)) {
+		    execute_qemu_sh(idx);
+	    }
+    }
+
+    return 0;
+}
+#endif
