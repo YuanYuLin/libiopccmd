@@ -8,9 +8,8 @@ static struct cmd_processor_t processor_list[] = {
 	{ CMD_FN_2,	CMD_NO_4,	CMD(sys_dao_get) },
 	{ CMD_FN_2,	CMD_NO_5,	CMD(sys_dao_set) },
 	{ CMD_FN_2,	CMD_NO_1,	CMD(sys_shcmd) },
-	{ CMD_FN_2,	CMD_NO_2,	CMD(rfb_daemon) },
-	//{ CMD_FN_2,	CMD_NO_2,	CMD(sys_dao) },
 	{ CMD_FN_2,	CMD_NO_3,	CMD(sys_shcmd_status) },
+	{ CMD_FN_2,	CMD_NO_2,	CMD(qemu_cmd) },
 
 	{ CMD_FN_1,	CMD_NO_1,	CMD(get_gpio) },
 	{ CMD_FN_1,	CMD_NO_2,	CMD(put_gpio) },

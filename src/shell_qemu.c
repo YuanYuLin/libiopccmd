@@ -28,7 +28,7 @@ static uint8_t* get_qemu_item_name_by_index(uint8_t index)
     str_ptr = json->get_json_array_string_by_index(db_reader, index, "");
     return str_ptr;
 }
-
+#if 0
 #define QEMU_IFUP	"/tmp/qemu-ifup"
 static void write_qemu_ifup()
 {
@@ -51,13 +51,12 @@ static void write_qemu_ifup()
 		}
 	}
 }
-
+#endif
 #define QEMU_SH		"/tmp/qemu_%d.sh"
 static void write_qemu_sh(uint8_t idx, uint8_t *name, uint8_t *rootfs, uint8_t *nethwaddr, uint16_t memory)
 {
 	const uint8_t *sys_rootfs_id = "disk-virtio-sys";
 	const uint8_t *sys_netdev_id = "net-virtio-sys";
-	uint8_t supported_kvm = 0;
 	uint8_t path[20] = { 0 };
 	memset(&path[0], 0, 20);
 	sprintf(path, QEMU_SH, idx);
@@ -65,32 +64,32 @@ static void write_qemu_sh(uint8_t idx, uint8_t *name, uint8_t *rootfs, uint8_t *
 
 	if(fp) {
 		fprintf(fp, "#!/bin/sh\n");
-		if(supported_kvm) {
-			fprintf(fp, "/bin/grep 'vmx' /proc/cpuinfo\n");
-			fprintf(fp, "support_intel_kvm=$?\n");
-			fprintf(fp, "if [ $support_intel_kvm == 0 ]; then\n");
-			fprintf(fp, "SUPPORT_KVM='-enable-kvm -cpu host'\n");
-			fprintf(fp, "fi\n");
 
-			fprintf(fp, "/bin/grep 'svm' /proc/cpuinfo\n");
-			fprintf(fp, "support_amd_kvm=$?\n");
-			fprintf(fp, "if [ $support_amd_kvm == 0 ]; then\n");
-			fprintf(fp, "SUPPORT_KVM='-enable-kvm -cpu host'\n");
-			fprintf(fp, "fi\n");
-		}
+		fprintf(fp, "/bin/grep 'vmx' /proc/cpuinfo\n");
+		fprintf(fp, "support_intel_kvm=$?\n");
+		fprintf(fp, "if [ $support_intel_kvm == 0 ]; then\n");
+		fprintf(fp, "SUPPORT_KVM='-enable-kvm -cpu host'\n");
+		fprintf(fp, "fi\n");
+
+		fprintf(fp, "/bin/grep 'svm' /proc/cpuinfo\n");
+		fprintf(fp, "support_amd_kvm=$?\n");
+		fprintf(fp, "if [ $support_amd_kvm == 0 ]; then\n");
+		fprintf(fp, "SUPPORT_KVM='-enable-kvm -cpu host'\n");
+		fprintf(fp, "fi\n");
+
 		fprintf(fp, "QEMU1='qemu-system-x86_64 -M q35 -realtime mlock=off -no-user-config -nodefaults'\n");
 		fprintf(fp, "QEMU2='-uuid 20180801-0000-0000-0000-%012d'\n", idx);
 		fprintf(fp, "QEMU3='-m %d -vnc :%d -vga std'\n", memory, idx);
-		fprintf(fp, "QEMU4=$SUPPORT_KVM\n");
+		fprintf(fp, "QEMU4='-qmp unix:/var/run/qemu%d.uds,server,nowait'\n", idx);
+		fprintf(fp, "QEMU5='-device ipmi-bmc-sim,id=bmc0 -device isa-ipmi-kcs,bmc=bmc0,irq=5'\n");
 
 		fprintf(fp, "PCI1='-device virtio-balloon-pci,id=balloon0 -msg timestamp=on'\n");
-		fprintf(fp, "PCI2='–drive file=%s,format=qcow2,if=none,id=device-%s'\n", rootfs, sys_rootfs_id);
-		fprintf(fp, "PCI21='-device virtio-blk-pci,scsi=off,bus=pci.0,addr=0x2,drive=device-%s,id=%s,bootindex=2'\n", sys_rootfs_id, sys_rootfs_id);
-		fprintf(fp, "PCI3='-netdev type=tap,script=/tmp/qemu-ifup,id=device-%s'\n", sys_netdev_id);
-		fprintf(fp, "PCI31='-device virtio-net-pci,netdev=device-%s,id=%s,mac=%s,bus=pci.0,addr=0x3'\n", sys_netdev_id, sys_netdev_id, nethwaddr);
+		fprintf(fp, "PCI2='-drive file=%s,format=qcow2,if=none,id=device-%s'\n", rootfs, sys_rootfs_id);
+		fprintf(fp, "PCI21='-device virtio-blk-pci,scsi=off,drive=device-%s,id=%s,bootindex=2'\n", sys_rootfs_id, sys_rootfs_id);
+		fprintf(fp, "PCI3='-netdev type=tap,script=/etc/qemu-ifup,id=device-%s'\n", sys_netdev_id);
+		fprintf(fp, "PCI31='-device virtio-net-pci,netdev=device-%s,id=%s,mac=%s'\n", sys_netdev_id, sys_netdev_id, nethwaddr);
 
-		fprintf(fp, "QEMU='$QEMU1 $QEMU2 $QEMU3 $QEMU4 $PCI1 $PCI2 $PCI21 $PCI3 $PCI31'\n");
-		fprintf(fp, "$QEMU\n");
+		fprintf(fp, "$QEMU1 $QEMU2 $QEMU3 $QEMU4 $QEMU5 $SUPPORT_KVM $PCI1 $PCI2 $PCI21 $PCI3 $PCI31\n");
 		fclose(fp);
 		chmod(path, S_IRUSR | S_IWUSR | S_IXUSR);
 	}
@@ -129,7 +128,9 @@ static int execute_qemu_sh(int idx)
 
 int start_qemu(uint8_t status_id, uint8_t * args)
 {
+#if 0
     write_qemu_ifup();
+#endif
     int qemu_count = get_qemu_count();
     for(int idx=0;idx<qemu_count;idx++) {
 	    if(create_qemu_sh(idx)) {
@@ -139,4 +140,5 @@ int start_qemu(uint8_t status_id, uint8_t * args)
 
     return 0;
 }
+
 #endif
