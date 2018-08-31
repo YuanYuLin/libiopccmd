@@ -37,5 +37,6 @@ SRC += shell_drbd.c
 SRC += shell_mount.c
 SRC += shell_netifc.c
 SRC += shell_misc.c
+SRC += shell_samba.c
 
 include Makefile.include.lib

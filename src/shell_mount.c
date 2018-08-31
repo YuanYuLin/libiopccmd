@@ -91,35 +91,38 @@ static int mount_storage_by_item(uint8_t *item_name)
     log->debug(0x01, "[%s %d] - %s\n", __func__, __LINE__, db_val);
     json_reader_t* storage_reader = json->create_json_reader(&db_val[0]);
     json->debug_json(storage_reader);
-    uint8_t *part_type = json->get_json_string(storage_reader, "type", "");
-    uint8_t *part_src = json->get_json_string(storage_reader, "src", "");
-    uint8_t *part_dst = json->get_json_string(storage_reader, "dst", "");
-    uint8_t swap_device = 0;
-    uint32_t swap_size = 0;
-    if(strcmp(part_type, "fat") == 0) {
-        memset(&cmd[0], 0, CMDLEN);
-        sprintf(cmd, "mkdir -p %s", part_dst);
-        log->debug(0x01, "%s - %s\n", __func__, cmd);
-        misc->syscmd(cmd);
+    uint8_t enable = json->get_json_int(storage_reader, "enable", 0);
+    if(enable) {
+        uint8_t *part_type = json->get_json_string(storage_reader, "type", "");
+        uint8_t *part_src = json->get_json_string(storage_reader, "src", "");
+        uint8_t *part_dst = json->get_json_string(storage_reader, "dst", "");
+        uint8_t swap_device = 0;
+        uint32_t swap_size = 0;
+        if(strcmp(part_type, "fat") == 0) {
+            memset(&cmd[0], 0, CMDLEN);
+            sprintf(cmd, "mkdir -p %s", part_dst);
+            log->debug(0x01, "%s - %s\n", __func__, cmd);
+            misc->syscmd(cmd);
 
-        memset(&cmd[0], 0, CMDLEN);
-        sprintf(cmd, "mount -t vfat %s %s", part_src, part_dst);
-        log->debug(0x01, "%s - %s\n", __func__, cmd);
-        misc->syscmd(cmd);
-    }else if(strcmp(part_type, "ext4") == 0) {
-        memset(&cmd[0], 0, CMDLEN);
-        sprintf(cmd, "mkdir -p %s", part_dst);
-        log->debug(0x01, "%s - %s\n", __func__, cmd);
-        misc->syscmd(cmd);
+            memset(&cmd[0], 0, CMDLEN);
+            sprintf(cmd, "mount -t vfat %s %s", part_src, part_dst);
+            log->debug(0x01, "%s - %s\n", __func__, cmd);
+            misc->syscmd(cmd);
+        }else if(strcmp(part_type, "ext4") == 0) {
+            memset(&cmd[0], 0, CMDLEN);
+            sprintf(cmd, "mkdir -p %s", part_dst);
+            log->debug(0x01, "%s - %s\n", __func__, cmd);
+            misc->syscmd(cmd);
 
-        memset(&cmd[0], 0, CMDLEN);
-        sprintf(cmd, "mount -t ext4 %s %s", part_src, part_dst);
-        log->debug(0x01, "%s - %s\n", __func__, cmd);
-        misc->syscmd(cmd);
-    }else if(strcmp(part_type, "zram") == 0) {
-        swap_size = json->get_json_int(storage_reader, "size_kb", 20480);
-        swap_device = json->get_json_int(storage_reader, "device", 0);
-        setup_zram(swap_size, swap_device);
+            memset(&cmd[0], 0, CMDLEN);
+            sprintf(cmd, "mount -t ext4 %s %s", part_src, part_dst);
+            log->debug(0x01, "%s - %s\n", __func__, cmd);
+            misc->syscmd(cmd);
+        }else if(strcmp(part_type, "zram") == 0) {
+            swap_size = json->get_json_int(storage_reader, "size_kb", 20480);
+            swap_device = json->get_json_int(storage_reader, "device", 0);
+            setup_zram(swap_size, swap_device);
+        }
     }
 }
 

@@ -9,6 +9,7 @@
 #include "shell_common.h"
 #include "shell_lxc.h"
 #include "shell_qemu.h"
+#include "shell_samba.h"
 #include "shell_drbd.h"
 #include "shell_ssh.h"
 #include "shell_netifc.h"
@@ -240,6 +241,7 @@ static struct syscmd_t list[] = {
 	SHELL_CMD_LXC
 	SHELL_CMD_MISC
 	SHELL_CMD_QEMU
+	SHELL_CMD_SAMBA
 
 	SHELL_CMD_END
 };

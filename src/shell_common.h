@@ -30,6 +30,7 @@ struct syscmd_status_t {
 #define ID_STATUS_LXC		0x03
 #define ID_STATUS_STORAGE	0x04
 #define ID_STATUS_QEMU		0x05
+#define ID_STATUS_SAMBA		0x06
 
 #define STATUS_SSH_GENKEY_FINISHED	0x01
 #define STATUS_SSH_RUNNING		0x02
