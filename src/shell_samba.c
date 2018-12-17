@@ -40,7 +40,8 @@ static void gen_samba_cfg(FILE* fp, uint8_t *name, uint8_t *type, uint8_t *path)
 			fprintf(fp, "guest account = root\n");
 			fprintf(fp, "security = user\n");
 			fprintf(fp, "map to guest = Bad Password\n");
-			fprintf(fp, "unix charset = UTF-8\n");
+			//fprintf(fp, "dos charset = CP950\n");
+			fprintf(fp, "unix charset = UTF8\n");
 			//fprintf(fp, "printcap name = %s\n", PRINTCAP);
 			//fprintf(fp, "bind interfaces only = yes\n");
 			//fprintf(fp, "interfaces = 127.0.0.1 host_ip_address\n");
@@ -83,11 +84,11 @@ static int execute_samba()
     #undef L_STRLEN
     #define L_STRLEN	30
     struct ops_misc_t *misc = get_misc_instance();
-    uint8_t path[L_STRLEN] = { 0 };
-    memset(&path[0], 0, L_STRLEN);
-    //snprintf(path, L_STRLEN, "smbd -D -s %s", SAMBA_CFG);
-    snprintf(path, L_STRLEN, "smbd -i -S -s %s", SAMBA_CFG);
-    misc->syscmd(path);
+    uint8_t cmd[L_STRLEN] = { 0 };
+    memset(&cmd[0], 0, L_STRLEN);
+    snprintf(cmd, L_STRLEN, "smbd -D -s %s", SAMBA_CFG);
+    //snprintf(cmd, L_STRLEN, "smbd -i -S -s %s", SAMBA_CFG);
+    misc->syscmd(cmd);
     return 0;
 }
 

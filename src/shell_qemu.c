@@ -96,13 +96,30 @@ static void write_qemu_sh(uint8_t idx, uint8_t *name, uint8_t *rootfs, uint8_t *
 	}
 }
 #endif
-static void gen_qemu_sh_hdd(FILE* fp, uint8_t fs_idx, uint8_t *root)
+
+static void gen_qemu_sh_cdrom(FILE* fp, uint8_t cdrom_idx, uint8_t boot_idx, uint8_t* cdrom)
+{
+	if(cdrom == NULL) {
+		fprintf(fp, "PCI=$PCI'  -drive media=cdrom,id=cdrom-drive-%d,index=%d'\n", cdrom_idx, boot_idx);
+	} else {
+		fprintf(fp, "PCI=$PCI'  -drive media=cdrom,id=cdrom-drive-%d,index=%d,file=%s'\n", cdrom_idx, boot_idx, cdrom);
+	}
+	/*
+	const uint8_t *sys_cdrom_id = "cdrom";
+	fprintf(fp, "PCI=$PCI' -drive media=cdrom,if=none,id=device-%s-%d'\n", 
+			sys_cdrom_id, cdrom_idx);
+	fprintf(fp, "PCI=$PCI' -device virtio-blk-pci,scsi=off,drive=device-%s-%d,id=%s-%d,bootindex=%d'\n", 
+			sys_cdrom_id, cdrom_idx, sys_cdrom_id, cdrom_idx, boot_idx);
+	*/
+}
+
+static void gen_qemu_sh_hdd(FILE* fp, uint8_t fs_idx, uint8_t *root, uint8_t boot_idx)
 {
 	const uint8_t *sys_rootfs_id = "disk-virtio";
 	fprintf(fp, "PCI=$PCI' -drive file=%s,format=qcow2,if=none,id=device-%s-%d'\n", 
 			root, sys_rootfs_id, fs_idx);
 	fprintf(fp, "PCI=$PCI' -device virtio-blk-pci,scsi=off,drive=device-%s-%d,id=%s-%d,bootindex=%d'\n", 
-			sys_rootfs_id, fs_idx, sys_rootfs_id, fs_idx);
+			sys_rootfs_id, fs_idx, sys_rootfs_id, fs_idx, boot_idx);
 }
 
 static void gen_qemu_sh_net(FILE* fp, uint8_t net_idx, uint8_t *nethwaddr)
@@ -112,6 +129,13 @@ static void gen_qemu_sh_net(FILE* fp, uint8_t net_idx, uint8_t *nethwaddr)
 			sys_netdev_id, net_idx);
 	fprintf(fp, "PCI=$PCI' -device virtio-net-pci,netdev=device-%s-%d,id=%s-%d,mac=%s'\n", 
 			sys_netdev_id, net_idx, sys_netdev_id, net_idx, nethwaddr);
+}
+
+static void gen_qemu_sh_misc(FILE* fp)
+{
+	fprintf(fp, "PCI=$PCI' -device virtio-balloon-pci,id=balloon0 -msg timestamp=on'\n");
+	fprintf(fp, "QEMU=$QEMU' -usb -device usb-tablet'\n");
+	//fprintf(fp, "QEMU=$QEMU' -device ipmi-bmc-sim,id=bmc0 -device isa-ipmi-kcs,bmc=bmc0,irq=5'\n");
 }
 
 static void gen_qemu_sh_begin(FILE* fp, uint8_t idx, uint8_t *name, uint16_t smp, uint32_t memory)
@@ -135,9 +159,8 @@ static void gen_qemu_sh_begin(FILE* fp, uint8_t idx, uint8_t *name, uint16_t smp
 	fprintf(fp, "QEMU=$QEMU' -uuid 20180801-0000-0000-0000-%012d'\n", idx);
 	fprintf(fp, "QEMU=$QEMU' -smp %d -m %d -vnc :%d -vga virtio'\n", smp, memory, idx);
 	fprintf(fp, "QEMU=$QEMU' -qmp unix:/var/run/qemu%d.uds,server,nowait'\n", idx);
-	//fprintf(fp, "QEMU=$QEMU' -device ipmi-bmc-sim,id=bmc0 -device isa-ipmi-kcs,bmc=bmc0,irq=5'\n");
+	fprintf(fp, "QEMU=$QEMU' -monitor tcp:127.0.0.1:%d,server,nowait'\n", (2300+idx));
 
-	fprintf(fp, "PCI='-device virtio-balloon-pci,id=balloon0 -msg timestamp=on'\n");
 }
 
 static void gen_qemu_sh_end(FILE* fp, uint8_t idx, uint8_t *name)
@@ -153,6 +176,7 @@ static int create_qemu_sh(uint8_t idx)
     uint8_t path[20] = { 0 };
     memset(&path[0], 0, 20);
     snprintf(path, 20, QEMU_SH, idx);
+    uint8_t cdrom_count = 2;
 
     uint8_t db_item[DBVALLEN];
     memset(&db_item[0], 0, DBVALLEN);
@@ -172,12 +196,26 @@ static int create_qemu_sh(uint8_t idx)
         uint16_t smp = json->get_json_int(qemu_reader, "smp", 0);
         FILE* fp = fopen(path, "w");
         gen_qemu_sh_begin(fp, idx, name, smp, memory);
+	gen_qemu_sh_misc(fp);
+        json_reader_t* cdroms_reader = json->get_json_array(qemu_reader, "cdroms", NULL);
+	for(int x=0;x<cdrom_count;x++) {
+		if(cdroms_reader) {
+			uint8_t* cdrom = json->get_json_array_string_by_index(cdroms_reader, x, "");
+			if(strlen(cdrom) != 0) {
+				gen_qemu_sh_cdrom(fp, x, x, cdrom);
+			} else {
+				gen_qemu_sh_cdrom(fp, x, x, NULL);
+			}
+		} else {
+			gen_qemu_sh_cdrom(fp, x, x, NULL);
+		}
+	}
         json_reader_t* rootfs_reader = json->get_json_array(qemu_reader, "rootfs", NULL);
         if(rootfs_reader) {
 	    int rootfs_count = json->get_json_array_count(rootfs_reader);
 	    for(int x=0;x<rootfs_count;x++) {
 		    uint8_t* rootfs = json->get_json_array_string_by_index(rootfs_reader, x, "");
-		    gen_qemu_sh_hdd(fp, x, rootfs);
+		    gen_qemu_sh_hdd(fp, x, rootfs, x + cdrom_count);
 	    }
         }
 	gen_qemu_sh_net(fp, 0, nethwaddr);
@@ -200,7 +238,7 @@ static int execute_qemu_sh(int idx)
 	return 0;
 }
 
-int start_qemu(uint8_t status_id, uint8_t * args)
+int start_qemu(uint8_t status_id, uint8_t *args)
 {
 #if 0
     write_qemu_ifup();
@@ -213,6 +251,27 @@ int start_qemu(uint8_t status_id, uint8_t * args)
     }
 
     return 0;
+}
+
+int add_qemu_img(uint8_t status_id, uint8_t *args)
+{
+    struct ops_log_t* log = get_log_instance();
+    uint8_t cmd[DBVALLEN] = { 0 };
+    uint8_t devices[DBVALLEN] = { 0 };
+    uint8_t *json_param = (uint8_t*)args;
+    struct ops_json_t* json = get_json_instance();
+    struct ops_misc_t* misc = get_misc_instance();
+    json_reader_t* reader = json->create_json_reader(json_param);
+    uint8_t *format = json->get_json_string(reader, "format", "qcow2");
+    uint8_t *disk_path = json->get_json_string(reader, "disk_path", "");
+    uint8_t *size_unit = json->get_json_string(reader, "size_uint", "G");
+    uint16_t size = json->get_json_int(reader, "size", 0);
+    memset(&devices[0], DBVALLEN, 0);
+    memset(&cmd[0], DBVALLEN, 0);
+
+    sprintf(cmd, "qemu-img create -f %s %s %d%s", format, disk_path, size, size_unit);
+    log->debug(0x01, "%s\n", cmd);
+    misc->syscmd(cmd);
 }
 
 #endif
