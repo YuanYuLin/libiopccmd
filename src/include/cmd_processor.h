@@ -16,6 +16,8 @@ uint8_t CMD(get_gpio_list)(uint8_t* req_data, uint8_t* res_data);
 
 uint8_t CMD(sys_shcmd)(uint8_t* req_data, uint8_t* res_data);
 uint8_t CMD(sys_shcmd_status)(uint8_t* req_data, uint8_t* res_data);
+uint8_t CMD(sys_dao_save)(uint8_t* req_data, uint8_t* res_data);
+uint8_t CMD(sys_dao_reset)(uint8_t* req_data, uint8_t* res_data);
 uint8_t CMD(sys_dao_get)(uint8_t* req_data, uint8_t* res_data);
 uint8_t CMD(sys_dao_set)(uint8_t* req_data, uint8_t* res_data);
 uint8_t CMD(qemu_cmd)(uint8_t* req_data, uint8_t* res_data);

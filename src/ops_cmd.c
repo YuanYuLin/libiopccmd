@@ -5,11 +5,14 @@
 #include "cmd_processor.h"
 
 static struct cmd_processor_t processor_list[] = {
+	{ CMD_FN_2,	CMD_NO_1,	CMD(sys_shcmd) },
+	{ CMD_FN_2,	CMD_NO_2,	CMD(qemu_cmd) },
+	{ CMD_FN_2,	CMD_NO_3,	CMD(sys_shcmd_status) },
+
 	{ CMD_FN_2,	CMD_NO_4,	CMD(sys_dao_get) },
 	{ CMD_FN_2,	CMD_NO_5,	CMD(sys_dao_set) },
-	{ CMD_FN_2,	CMD_NO_1,	CMD(sys_shcmd) },
-	{ CMD_FN_2,	CMD_NO_3,	CMD(sys_shcmd_status) },
-	{ CMD_FN_2,	CMD_NO_2,	CMD(qemu_cmd) },
+	{ CMD_FN_2,	CMD_NO_6,	CMD(sys_dao_save) },
+	{ CMD_FN_2,	CMD_NO_7,	CMD(sys_dao_reset) },
 
 	{ CMD_FN_1,	CMD_NO_1,	CMD(get_gpio) },
 	{ CMD_FN_1,	CMD_NO_2,	CMD(put_gpio) },
@@ -43,11 +46,11 @@ static uint8_t process(struct msg_t* req, struct msg_t* res)
 	}
 
 	if(cmd_found) {
-		log->debug(0x01, "%s-%s-%d:cmd[%x:%x] found\n", __FILE__, __func__, __LINE__, req->fn, req->cmd);
+		log->debug(0x01, __FILE__, __func__, __LINE__, "cmd[%x:%x] found", req->fn, req->cmd);
 		if(cmd_proc->processor)
 			cmd_status = cmd_proc->processor(req->data, res->data);
 	} else {
-		log->debug(0x01, "%s-%s-%d:cmd[%x:%x] NOT found\n", __FILE__, __func__, __LINE__,req->fn, req->cmd);
+		log->debug(0x01, __FILE__, __func__, __LINE__, "cmd[%x:%x] NOT found\n", req->fn, req->cmd);
 		cmd_status = CMD_STATUS_NOT_FOUND;
 	}
 

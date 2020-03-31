@@ -61,10 +61,11 @@ static uint8_t* get_netifc_by_index(uint8_t index)
     memset(&db_val[0], 0, DBVALLEN);
     db->get_val("netifc_count", &db_val[0]);
     json_reader_t* db_reader = json->create_json_reader(&db_val[0]);
-    str_ptr = json->get_json_array_string_by_index(db_reader, index, "");
+    json_reader_t* array_reader = json->get_json_array_object_by_index(db_reader, index);
+    str_ptr = json->get_json_string(array_reader, NULL, "");
     return str_ptr;
 }
-
+/*
 static int parse_args(uint8_t* args)
 {
     struct ops_json_t* json = get_json_instance();
@@ -73,13 +74,13 @@ static int parse_args(uint8_t* args)
     //uint8_t* ifc = json->get_json_string(reader, "ifc", "");
 	return 0;
 }
-
+*/
 static int up_netifc_by_item(uint8_t *key_item)
 {
     struct ops_db_t* db = get_db_instance();
     struct ops_log_t* log = get_log_instance();
     struct ops_json_t* json = get_json_instance();
-    struct ops_misc_t* misc = get_misc_instance();
+    struct ops_shell_t* shell = get_shell_instance();
     uint8_t db_val[DBVALLEN];
     uint8_t cmd[CMDLEN] = {0};
     uint8_t net_ifc_name[8];
@@ -97,6 +98,7 @@ static int up_netifc_by_item(uint8_t *key_item)
     uint8_t net_vlan = json->get_json_boolean(net_reader, "vlan", 0);
     int net_tag = json->get_json_int(net_reader, "tag", 0);
     uint8_t *net_src = json->get_json_string(net_reader, "src", "none");
+    uint8_t *net_hwaddress = json->get_json_string(net_reader, "hwaddress", "");
 
     //if( (strlen(net_type) == strlen("eth")) && (memcmp(net_type, "eth", strlen("eth")) == 0) ) 
     //else if( (strlen(net_type) == strlen("bridge")) && (memcmp(net_type, "bridge", strlen("bridge")) == 0) ) 
@@ -106,7 +108,7 @@ static int up_netifc_by_item(uint8_t *key_item)
 
 		    memset(&cmd[0], 0, CMDLEN);
 		    sprintf(cmd, "vconfig add %s %d", net_name, net_tag);
-		    misc->syscmd(cmd);
+		    shell->send_sh(SHELL_INSTANCE, strlen(cmd), cmd);
 
 	    } else {
 		    sprintf(&net_ifc_name[0], "%s", net_name);
@@ -116,45 +118,54 @@ static int up_netifc_by_item(uint8_t *key_item)
 
 		    memset(&cmd[0], 0, CMDLEN);
 		    sprintf(cmd, "brctl addbr %s", net_ifc_name);
-		    log->debug(0x01, "%s - %s\n", __func__, cmd);
-		    misc->syscmd(cmd);
+		    log->debug(0x01, __FILE__, __func__, __LINE__, "%s", cmd);
+		    shell->send_sh(SHELL_INSTANCE, strlen(cmd), cmd);
 		    json_reader_t* net_devices_reader = json->get_json_array(net_reader, "devices", NULL);
 		    if(net_devices_reader){
 			    int net_devices_count = json->get_json_array_count(net_devices_reader);
-			    log->debug(0x01, "%s - %d\n", __func__, net_devices_count);
+			    log->debug(0x01, __FILE__, __func__, __LINE__, "%d", net_devices_count);
 			    for(int x=0;x<net_devices_count;x++) {
-				    uint8_t* net_device = json->get_json_array_string_by_index(net_devices_reader, x, "");
+				    json_reader_t* array_reader = json->get_json_array_object_by_index(net_devices_reader, x);
+				    uint8_t* net_device = json->get_json_string(array_reader, NULL, "");
 				    memset(&cmd[0], 0, CMDLEN);
 				    sprintf(cmd, "brctl addif %s %s", net_ifc_name, net_device);
-				    log->debug(0x01, "%s - %s\n", __func__, cmd);
-				    misc->syscmd(cmd);
+				    log->debug(0x01, __FILE__, __func__, __LINE__, "%s", cmd);
+				    shell->send_sh(SHELL_INSTANCE, strlen(cmd), cmd);
 			    }
 		    }
 	    } else {
 	    }
 
+	    if(strcmp(net_hwaddress, "") == 0) {
+	            log->debug(0x01, __FILE__, __func__, __LINE__, "%s address is empty", net_ifc_name);
+	    }else{
+                    memset(&cmd[0], 0, CMDLEN);
+    	            sprintf(cmd, "ifconfig %s hw ether %s", net_ifc_name, net_hwaddress);
+	            log->debug(0x01, __FILE__, __func__, __LINE__, "%s", cmd);
+		    shell->send_sh(SHELL_INSTANCE, strlen(cmd), cmd);
+	    }
     	    memset(&cmd[0], 0, CMDLEN);
 	    sprintf(cmd, "ifconfig %s up", net_ifc_name);
-	    log->debug(0x01, "%s - %s\n", __func__, cmd);
-	    misc->syscmd(cmd);
+	    log->debug(0x01, __FILE__, __func__, __LINE__, "%s", cmd);
+	    shell->send_sh(SHELL_INSTANCE, strlen(cmd), cmd);
 
 	    if( strcmp(net_src, "none") == 0) {
 		    memset(&cmd[0], 0, CMDLEN);
 		    sprintf(cmd, "ifconfig %s 0.0.0.0", net_ifc_name);
-		    log->debug(0x01, "%s - %s\n", __func__, cmd);
-		    misc->syscmd(cmd);
+	    	    log->debug(0x01, __FILE__, __func__, __LINE__, "%s", cmd);
+		    shell->send_sh(SHELL_INSTANCE, strlen(cmd), cmd);
 	    } else if( strcmp(net_src, "dhcp") == 0) {
 		    memset(&cmd[0], 0, CMDLEN);
 		    sprintf(cmd, "udhcpc -b -n -p /var/run/udhcpc.%s.pid -i %s", net_ifc_name, net_ifc_name);
-		    log->debug(0x01, "%s - %s\n", __func__, cmd);
-		    misc->syscmd(cmd);
+	    	    log->debug(0x01, __FILE__, __func__, __LINE__, "%s", cmd);
+		    shell->send_sh(SHELL_INSTANCE, strlen(cmd), cmd);
 	    } else if( strcmp(net_src, "static") == 0) {
 		    net_address = json->get_json_string(net_reader, "address", "0.0.0.0");
 		    net_netmask = json->get_json_string(net_reader, "netmask", "255.255.255.0");
 		    memset(&cmd[0], 0, CMDLEN);
 		    sprintf(cmd, "ifconfig %s %s netmask %s", net_ifc_name, net_address, net_netmask);
-		    log->debug(0x01, "%s - %s\n", __func__, cmd);
-		    misc->syscmd(cmd);
+	    	    log->debug(0x01, __FILE__, __func__, __LINE__, "%s", cmd);
+		    shell->send_sh(SHELL_INSTANCE, strlen(cmd), cmd);
 	    }
 
 	return 0;
@@ -165,11 +176,12 @@ int up_netifc(uint8_t status_id, uint8_t* args)
     struct ops_log_t* log = get_log_instance();
     int count = 0;
 
-    parse_args(args);
+    //parse_args(args);
     count = get_netifc_count();
+    log->debug(0x01, __FILE__, __func__, __LINE__, "cnt:%d\n", count);
     for(int i=0;i<count;i++){
 	    uint8_t *str_ptr = get_netifc_by_index(i);
-	    log->debug(0x01, "%s - %s\n", __func__, str_ptr);
+	    log->debug(0x01, __FILE__, __func__, __LINE__, "%s", str_ptr);
 	    up_netifc_by_item(str_ptr);
     }
 
@@ -180,15 +192,15 @@ int down_netifc(uint8_t status_id, uint8_t* args)
 {
     struct ops_log_t* log = get_log_instance();
     struct ops_json_t* json = get_json_instance();
-    struct ops_misc_t* misc = get_misc_instance();
+    struct ops_shell_t* shell = get_shell_instance();
     uint8_t cmd[CMDLEN] = {0};
     uint8_t* ifc = NULL;
     memset(&cmd[0], 0, CMDLEN);
     json_reader_t* reader = json->create_json_reader(args);
     ifc = json->get_json_string(reader, "ifc", "");
     sprintf(cmd, "ifconfig %s down", ifc);
-    log->debug(0x01, "%s - %s\n", __func__, cmd);
-    misc->syscmd(cmd);
+    log->debug(0x01, __FILE__, __func__, __LINE__, "%s", cmd);
+    shell->send_sh(SHELL_INSTANCE, strlen(cmd), cmd);
 
     return 0;
 }

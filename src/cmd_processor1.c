@@ -45,7 +45,7 @@ uint8_t CMD(get_gpio)(uint8_t* req_data, uint8_t* res_data)
 	uint32_t res_len = 0;
 
 	// Get Request Begin
-	log->debug(0x01, "json: %s\n", req_data);
+	log->debug(0x01, __FILE__, __func__, __LINE__, "json: %s", req_data);
 	req_gpio_type = json->get_json_string(reader, JS_TYPE, "");
 	req_gpio_port = json->get_json_int(reader, JS_PORT, 0);
 	req_gpio_pin = json->get_json_int(reader, JS_PIN, 0);
@@ -73,7 +73,7 @@ uint8_t CMD(get_gpio)(uint8_t* req_data, uint8_t* res_data)
 	json->set_json_string(writer, JS_UNIX_TIMESTAMP, res_gpio_unix_timestamp);
 
 	res_len = json->out_json_to_bytes(writer, res_data);
-	log->debug(0x01, "len =%ld, data:%s\n", res_len, res_data);
+	log->debug(0x01, __FILE__, __func__, __LINE__, "len =%ld, data:%s", res_len, res_data);
 	// Create Response End
 
 	return CMD_STATUS_NORMAL;
@@ -106,7 +106,7 @@ uint8_t CMD(put_gpio)(uint8_t* req_data, uint8_t* res_data)
 	uint32_t res_len = 0;
 
 	// Get Request Begin
-	log->debug(0x01, "json: %s\n", req_data);
+	log->debug(0x01, __FILE__, __func__, __LINE__, "json: %s", req_data);
 	req_gpio_type = json->get_json_string(reader, JS_TYPE, "");
 	req_gpio_port = json->get_json_int(reader, JS_PORT, 0);
 	req_gpio_pin = json->get_json_int(reader, JS_PIN, 0);
@@ -139,7 +139,7 @@ uint8_t CMD(put_gpio)(uint8_t* req_data, uint8_t* res_data)
 	json->set_json_string(writer, JS_UNIX_TIMESTAMP, res_gpio_unix_timestamp);
 
 	res_len = json->out_json_to_bytes(writer, res_data);
-	log->debug(0x01, "len =%ld, data:%s\n", res_len, res_data);
+	log->debug(0x01, __FILE__, __func__, __LINE__, "len =%ld, data:%s", res_len, res_data);
 	// Create Response End
 
 	return CMD_STATUS_NORMAL;
@@ -166,7 +166,7 @@ uint8_t CMD(get_gpio_list)(uint8_t* req_data, uint8_t* res_data)
 	uint32_t res_len = 0;
 
 	// Get Request Begin
-	log->debug(0x01, "json: %s\n", req_data);
+	log->debug(0x01, __FILE__, __func__, __LINE__, "json: %s", req_data);
 	req_gpio_type = json->get_json_string(reader, JS_TYPE, "");
 	// Get Request End
 
@@ -206,7 +206,7 @@ uint8_t CMD(get_gpio_list)(uint8_t* req_data, uint8_t* res_data)
 
 	// Create Response Begin
 	res_len = json->out_json_to_bytes(array_writer, res_data);
-	log->debug(0x01, "len =%ld, data:%s\n", res_len, res_data);
+	log->debug(0x01, __FILE__, __func__, __LINE__, "len =%ld, data:%s", res_len, res_data);
 	// Create Response End
 
 	return CMD_STATUS_NORMAL;

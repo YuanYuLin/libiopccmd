@@ -25,7 +25,8 @@ static uint8_t* get_samba_item_name_by_index(uint8_t index)
     memset(&db_val[0], 0, DBVALLEN);
     db->get_val("samba_count", &db_val[0]);
     json_reader_t* db_reader = json->create_json_reader(&db_val[0]);
-    str_ptr = json->get_json_array_string_by_index(db_reader, index, "");
+    json_reader_t* array_reader = json->get_json_array_object_by_index(db_reader, index);
+    str_ptr = json->get_json_string(array_reader, NULL, "");
     return str_ptr;
 }
 #define SAMBA_CFG		"/tmp/smb.cfg"
@@ -73,7 +74,7 @@ static int create_samba_cfg(FILE* fp, uint8_t idx)
     uint8_t *name = json->get_json_string(qemu_reader, "name", "");
     uint8_t *type = json->get_json_string(qemu_reader, "type", "");
     uint8_t *smbpath = json->get_json_string(qemu_reader, "path", "");
-    log->debug(0x01, "en:%d, %s, %s, %s\n", enable, name, type, smbpath);
+    log->debug(0x01, __FILE__, __func__, __LINE__, "en:%d, %s, %s, %s", enable, name, type, smbpath);
     if(enable)
         gen_samba_cfg(fp, name, type, smbpath);
     return enable;
@@ -83,12 +84,12 @@ static int execute_samba()
 {
     #undef L_STRLEN
     #define L_STRLEN	30
-    struct ops_misc_t *misc = get_misc_instance();
+    struct ops_shell_t *shell = get_shell_instance();
     uint8_t cmd[L_STRLEN] = { 0 };
     memset(&cmd[0], 0, L_STRLEN);
     snprintf(cmd, L_STRLEN, "smbd -D -s %s", SAMBA_CFG);
     //snprintf(cmd, L_STRLEN, "smbd -i -S -s %s", SAMBA_CFG);
-    misc->syscmd(cmd);
+    shell->send_sh(SHELL_INSTANCE, strlen(cmd), cmd);
     return 0;
 }
 
@@ -129,6 +130,7 @@ int stop_samba(uint8_t status_id, uint8_t * args)
     #define L_STRLEN	40
 	struct ops_log_t* log = get_log_instance();
 	struct ops_misc_t* misc = get_misc_instance();
+	struct ops_shell_t* shell = get_shell_instance();
 	uint8_t cmd[L_STRLEN] = {0};
 	uint16_t pid = 0;
 	memset(&cmd[0], 0, L_STRLEN);
@@ -137,8 +139,8 @@ int stop_samba(uint8_t status_id, uint8_t * args)
 
 	if(pid > 0) {
 		snprintf(cmd, L_STRLEN, "kill -9 %d", pid);
-		log->debug(0x01, "[%s, %s-%d] %s\n", __FILE__, __func__, __LINE__, cmd);
-		misc->syscmd(cmd);
+		log->debug(0x01, __FILE__, __func__, __LINE__, "%s", cmd);
+		shell->send_sh(SHELL_INSTANCE, strlen(cmd), cmd);
 
 		set_status_stop(status_id);
 	}

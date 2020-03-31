@@ -1,15 +1,17 @@
+#include <stdlib.h>
+
 #include "shell_common.h"
 #include "shell_misc.h"
 
 static int run_set_hostname(uint8_t* hostname)
 {
     struct ops_log_t* log = get_log_instance();
-    struct ops_misc_t* misc = get_misc_instance();
+    struct ops_shell_t* shell = get_shell_instance();
     uint8_t cmd[CMDLEN] = {0};
     memset(&cmd[0], 0, CMDLEN);
     sprintf(cmd, "hostname %s", hostname);
-    log->debug(0x01, "%s - %s\n", __func__, cmd);
-    misc->syscmd(cmd);
+    log->debug(0x01, __FILE__, __func__, __LINE__, "%s\n", cmd);
+    shell->send_sh(SHELL_INSTANCE, strlen(cmd), cmd);
     return 0;
 }
 
@@ -33,7 +35,7 @@ int set_hostname(uint8_t status_id, uint8_t* args)
 	    json_reader_t* hostname_cfg_reader = NULL;
 	    if(db->get_val("ext_hostname_cfg_json", &db_val2[0]) <= 0){
 		    hostname_cfg_json = json->get_json_string(db_reader, "hostname_cfg_json", "");
-		    log->debug(0x01, "[%s - %d] %s\n", __func__, __LINE__, hostname_cfg_json);
+		    log->debug(0x01, __FILE__, __func__, __LINE__, "%s", hostname_cfg_json);
 		    hostname_cfg_reader = json->create_json_reader_by_file(hostname_cfg_json);
 		    json->out_json_to_bytes(hostname_cfg_reader, &db_val2[0]);
 		    db->set_val("ext_hostname_cfg_json", &db_val2[0]);
@@ -49,15 +51,33 @@ int set_hostname(uint8_t status_id, uint8_t* args)
 	return 0;
 }
 
+int set_environment(uint8_t status_id, uint8_t* args)
+{
+    struct ops_log_t* log = get_log_instance();
+    struct ops_json_t* json = get_json_instance();
+    struct ops_shell_t* shell = get_shell_instance();
+    uint8_t *env_pair = NULL;
+    json_reader_t* reader = json->create_json_reader(args);
+    env_pair = json->get_json_string(reader, "env", "");
+    uint8_t cmd[CMDLEN] = {0};
+    memset(&cmd[0], 0, CMDLEN);
+    sprintf(cmd, "export %s", env_pair);
+    log->debug(0x01, __FILE__, __func__, __LINE__, "env : %s", cmd);
+    shell->send_sh(SHELL_INSTANCE, strlen(cmd), cmd);
+    return 0;
+    //putenv(env_pair);
+    //return 0;
+}
+
 static int run_reboot_system()
 {
 	struct ops_log_t* log = get_log_instance();
-	struct ops_misc_t* misc = get_misc_instance();
+	struct ops_shell_t* shell = get_shell_instance();
 	uint8_t cmd[CMDLEN] = {0};
 	memset(&cmd[0], 0, CMDLEN);
 	sprintf(cmd, "reboot");
-	log->debug(0x01, "[%s-%d] %s\n", __func__, __LINE__, cmd);
-	misc->syscmd(cmd);
+	log->debug(0x01, __FILE__, __func__, __LINE__, "reboot : %s", cmd);
+	shell->send_sh(SHELL_INSTANCE, strlen(cmd), cmd);
 	return 0;
 }
 
@@ -72,7 +92,7 @@ int reboot_system(uint8_t status_id, uint8_t* args)
 	if(strcmp(magic, MAGIC_STR) == 0) {
 		run_reboot_system();
 	} else {
-		log->debug(0x01, "[%s-%d] magic string error:%s\n", __func__, __LINE__, magic);
+		log->error(0xFF, __FILE__, __func__, __LINE__, "magic string error:%s", magic);
 	}
 	return 0;
 }
@@ -80,12 +100,12 @@ int reboot_system(uint8_t status_id, uint8_t* args)
 static int run_sync_datetime(uint8_t *ntp_server)
 {
 	struct ops_log_t* log = get_log_instance();
-	struct ops_misc_t* misc = get_misc_instance();
+	struct ops_shell_t* shell = get_shell_instance();
 	uint8_t cmd[CMDLEN] = {0};
 	memset(&cmd[0], 0, CMDLEN);
 	sprintf(cmd, "/usr/sbin/ntpd -p %s -qNn", ntp_server);
-	log->debug(0x01, "[%s-%d] %s\n", __func__, __LINE__, cmd);
-	misc->syscmd(cmd);
+	log->debug(0x01, __FILE__, __func__, __LINE__, "sync datetime: %s", cmd);
+	shell->send_sh(SHELL_INSTANCE, strlen(cmd), cmd);
 	return 0;
 }
 

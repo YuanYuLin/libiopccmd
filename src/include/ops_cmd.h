@@ -43,5 +43,6 @@ struct cmd_processor_t {
 #define CMD_NO_4			0x04
 #define CMD_NO_5			0x05
 #define CMD_NO_6			0x06
+#define CMD_NO_7			0x07
 
 #endif

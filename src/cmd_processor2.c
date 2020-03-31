@@ -18,7 +18,7 @@ uint8_t CMD(qemu_cmd)(uint8_t* req_data, uint8_t* res_data)
 	struct ops_log_t* log = get_log_instance();
 	struct ops_json_t* json = get_json_instance();
 	//struct ops_mq_t* mq = get_mq_instance();
-	log->debug(0x01, "AAA %s\n", req_data);
+	log->debug(0x01, __FILE__, __func__, __LINE__, "req_data %s", req_data);
 	json_reader_t* reader = json->create_json_reader(req_data);
 	uint8_t *ops = json->get_json_string(reader, "ops", "");
 	uint8_t index = (uint8_t)json->get_json_int(reader, "index", 0);
@@ -42,7 +42,7 @@ uint8_t CMD(qemu_cmd)(uint8_t* req_data, uint8_t* res_data)
 		queue_req.index = 0;
 		queue_req.magic = 0;
 
-		log->debug(0x01, "BBB %d, %d\n", index, action);
+		log->debug(0x01, "BBB %d, %d", index, action);
 		strcpy(queue_req.src, QUEUE_NAME_RFBCLIENT);
 		strcpy(queue_req.dst, QUEUE_NAME_RFBSERVER);
 		mq->set_to(QUEUE_NAME_RFBSERVER, &queue_req);
@@ -68,7 +68,7 @@ uint8_t CMD(qemu_cmd)(uint8_t* req_data, uint8_t* res_data)
 
 		net->qmp_client_send_and_recv(index, &req_msg[0], &res_msg[0]);
 
-		log->debug(0x01, "qemu[%d] response:%s\n", index, res_msg);
+		log->debug(0x01, __FILE__, __func__, __LINE__, "qemu[%d] response:%s", index, res_msg);
 		const uint8_t* tmpl = "{\"status\":\"%d\", \"ops\":\"qmp\", \"index\":%d, \"action\":%d, \"msg\":\"%s\"}";
 		sprintf(res_data, tmpl, 0x0, index, action, res_msg);
 	}
@@ -89,6 +89,36 @@ uint8_t CMD(sys_shcmd_status)(uint8_t* req_data, uint8_t* res_data)
 	return CMD_STATUS_NORMAL;
 }
 
+uint8_t CMD(sys_dao_save)(uint8_t* req_data, uint8_t* res_data)
+{
+	struct ops_log_t* log = get_log_instance();
+	struct ops_json_t* json = get_json_instance();
+	json_reader_t* reader = json->create_json_reader(req_data);
+	//uint8_t* ops = json->get_json_string(reader, "ops", "");
+	uint8_t* key = json->get_json_string(reader, KV_KEY, "");
+	uint16_t val_size = 0;
+	//uint8_t* val = NULL;
+	struct ops_db_t* db = get_db_instance();
+	db->save_iopc_storage();
+	log->debug(0x01, __FILE__, __func__, __LINE__, "key: %s, val[%d]: %s", key, val_size, res_data);
+	return CMD_STATUS_NORMAL;
+}
+
+uint8_t CMD(sys_dao_reset)(uint8_t* req_data, uint8_t* res_data)
+{
+	struct ops_log_t* log = get_log_instance();
+	struct ops_json_t* json = get_json_instance();
+	json_reader_t* reader = json->create_json_reader(req_data);
+	//uint8_t* ops = json->get_json_string(reader, "ops", "");
+	uint8_t* key = json->get_json_string(reader, KV_KEY, "");
+	uint16_t val_size = 0;
+	//uint8_t* val = NULL;
+	struct ops_db_t* db = get_db_instance();
+	db->reset_iopc_storage();
+	log->debug(0x01, __FILE__, __func__, __LINE__, "key: %s, val[%d]: %s", key, val_size, res_data);
+	return CMD_STATUS_NORMAL;
+}
+
 uint8_t CMD(sys_dao_get)(uint8_t* req_data, uint8_t* res_data)
 {
 	struct ops_log_t* log = get_log_instance();
@@ -100,7 +130,7 @@ uint8_t CMD(sys_dao_get)(uint8_t* req_data, uint8_t* res_data)
 	//uint8_t* val = NULL;
 	struct ops_db_t* db = get_db_instance();
 	val_size = db->get_val(key, res_data);
-	log->debug(0x01, "key: %s, val[%d]: %s\n", key, val_size, res_data);
+	log->debug(0x01, __FILE__, __func__, __LINE__, "key: %s, val[%d]: %s", key, val_size, res_data);
 	return CMD_STATUS_NORMAL;
 }
 
@@ -115,10 +145,8 @@ uint8_t CMD(sys_dao_set)(uint8_t* req_data, uint8_t* res_data)
 	uint8_t* val = json->get_json_string(reader, KV_VAL, "");
 	uint16_t val_size = 0;
 	struct ops_db_t* db = get_db_instance();
-	log->debug(0x1, "%d:%s\n", __LINE__, req_data);
-	log->debug(0x1, "%s-key: %s\n", __func__, key);
-	log->debug(0x1, "%s-val: %s\n", __func__, val);
+	log->debug(0x1, __FILE__, __func__, __LINE__, "req_data: %s, key: %s, val: %s", req_data, key, val);
 	val_size = db->set_val(key, val);
-	log->debug(0x1, "%s-val size: %d\n", __func__, val_size);
+	log->debug(0x1, __FILE__, __func__, __LINE__, "val size: %d", val_size);
 	return CMD_STATUS_NORMAL;
 }
